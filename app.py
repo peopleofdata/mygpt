@@ -1,6 +1,4 @@
-import json, os, openai, random
-import numpy as np
-from datetime import datetime
+import os, openai
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder=".")
