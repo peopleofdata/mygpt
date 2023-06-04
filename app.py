@@ -1,89 +1,75 @@
-key = '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'
-
-import random
+import json, os, openai, random
 import numpy as np
-import pickle
-import openai
-openai.api_key = key
-phrases = {}
+from datetime import datetime
+from flask import Flask, request, jsonify, send_from_directory
+
+app = Flask(__name__, static_folder=".")
+openai.api_key = key = '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'#os.environ.get('openai')
+history = [{'role':'user','content':'Hi! You are in default mode: (C)heck, (M)emorize or (R)ecall or just chat!'}]
+mode = 'default'
+phrases = {'hello':{'translation':'hello','score':0}}
 storage_file = 'memory.pickle'
 
-def load_phrases():
-    global phrases
-    try:
-        with open(storage_file, 'rb') as f:
-            phrases = pickle.load(f)
-    except FileNotFoundError:
-        phrases = {}
+@app.route('/')
+def index():
+    return send_from_directory('.', 'index.html')
 
-def save_phrases():
-    with open(storage_file, 'wb') as f:
-        pickle.dump(phrases, f)
+@app.route('/get_history', methods=['GET'])
+def get_history():
+    global history
+    return jsonify({"history": history}), 200
 
-def query_openai(phrase):
+def query_openai(prompt, text):
     response = openai.ChatCompletion.create(
-    model="gpt-4",
+    model="gpt-3.5-turbo",
     messages=[
-            {"role": "system", "content": "You translate user input into english"},
-            {"role": "user", "content": f"{phrase}"}
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"{text}"}
         ]
     )
     return response['choices'][0]['message']['content']
 
-def memorization():
-    while True:
-        phrase = input("Enter a phrase in your learning language (or 'exit' to stop): ")
-        if phrase.lower() == 'exit':
-            break
-        # Use OpenAI API to get the translation
-        translation = query_openai(phrase)
-        phrases[phrase] = {"translation": translation, "score": 0}
-        print(f"English translation: {translation}")
-        print("Phrase added to the memory bank.\n")
-
-def recall():
-    if not phrases:
-        print("There are no phrases in the memory bank. Switch to memorization mode to add phrases.")
-        return
-
-    # Sort phrases by score in descending order
-    sorted_phrases = sorted(phrases.items(), key=lambda x: x[1]['score'], reverse=True)
-
-    for phrase, info in sorted_phrases:
-        if random.choice([True, False]):
-            user_translation = input(f"Translate the following phrase into English: {phrase}\n")
-            correct_translation = info['translation']
+@app.route('/store_text', methods=['POST'])
+def store_text():
+    global history
+    global mode
+    global phrases
+    text = request.form.get('text')
+    history.append({'role':'user','content': text})
+    if not text:
+        system_response = {'role':'shell', 'content': 'No content?'}
+    if text.lower() in ['e','E','exit','d','default','q']:
+        mode = 'default'
+        system_response = {'role':'shell', 'content': 'Exited to default.'}
+    elif mode == 'default':
+        if text.lower() in ['c','C','check']:
+            system_response = {'role':'shell','content':str(phrases)}
+        elif text.lower() in ['m','M']:
+            mode = 'memorization'
+            system_response = {'role':'shell','content':mode}
+        elif text.lower() in ['r','R']:
+            mode = 'recall'
+            system_response = {'role':'shell','content':mode}
         else:
-            user_translation = input(f"Translate the following English phrase: {info['translation']}\n")
-            correct_translation = phrase
+            system_response = {'role':'assistant','content':query_openai("Respond smart and short.", text)}
+    elif mode =='memorization':
+        try:
+            openai_response = query_openai("You translate user input into english", text)
+            phrases[text] = {"translation": openai_response, "score": 0}
+            system_response= {'role':'assistant','content':openai_response}
+        except Exception as e:
+            system_response = {'role':'shell', 'content':str(e)}
+    elif mode =='recall':
+        print('recall_mode')
+        sorted_phrases = sorted(phrases.items(), key=lambda x: x[1]['score'], reverse=True)
+        for phrase, info in sorted_phrases[0]:
+            system_response = {'role':'shell', 'content':phrase}
+            history.append(system_response)
+            prompt = "You respond only CORRECT or INCORRECT. You receive USER input and TRANSLATION and respond CORRECT if the meaning is the same but the language is different."
+            openai_response = query_openai(prompt, f'USER:{text}, TRANSLATION:{phrase}')
+            system_response = {'role':'assistant', 'content':openai_response}
+    history.append(system_response)
+    return jsonify({"response": "This doesn't work anyway"}), 200
 
-        # Use OpenAI API to check the translation
-        # is_correct = OpenAI_API.check_translation(user_translation, correct_translation)
-        is_correct = np.random.choice([True, False])  # This is a placeholder
-        if is_correct:
-            phrases[phrase]['score'] -= 1
-            print("Correct! Well done.")
-        else:
-            phrases[phrase]['score'] += 1
-            print(f"Incorrect. The correct translation is: {correct_translation}")
-        print("\n")
-
-def run():
-    load_phrases()
-    while True:
-        mode = input("Enter the mode (M for memorization or R for recall) or 'exit' to quit: ")
-        if mode.lower() == 'exit':
-            save_phrases()
-            break
-        elif mode.lower() == 'check':
-            print(phrases)
-            continue
-        elif mode.lower() in ['m','M']:
-            memorization()
-        elif mode.lower() in ['r','R']:
-            recall()
-        else:
-            print("Invalid mode. Please enter either 'memorization' or 'recall'.\n")
-
-if __name__ == "__main__":
-    run()
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
