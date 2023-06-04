@@ -2,7 +2,7 @@ import os, openai
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder=".")
-openai.api_key = key = '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'#os.environ.get('openai')
+openai.api_key = os.environ.get('openai')
 history = [{'role':'user','content':'Hi! You are in default mode: (C)heck, (M)emorize or (R)ecall or just chat!'}]
 mode = 'default'
 phrases = {'hello':{'translation':'hello','score':0}}
