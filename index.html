@@ -4,9 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyGPT</title>
+    <link rel="icon" href="./brain.ico" type="image/x-icon">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/styles/default.min.css">
+    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/highlight.min.js"></script>
     <style>
+        body {
+            background-color: black;
+            color: white;
+        }
         #response {
             white-space: pre-wrap;
+        }
+        .code {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
         }
     </style>
     <script>
@@ -14,7 +26,16 @@
             const responseDiv = document.getElementById("response");
             const response = await fetch("/get_history");
             const jsonResponse = await response.json();
-            responseDiv.textContent = jsonResponse.history.map((item, index) => `${item.role}: ${item.content}`).join('\n');
+            responseDiv.innerHTML = jsonResponse.history.map((item, index) => {
+                let content = item.content;
+                if (item.role === "code") {
+                    content = `<pre><code class="code">${content}</code></pre>`;
+                    hljs.highlightBlock(content);
+                } else {
+                    content = content.replace(/\n/g, '<br>');
+                }
+                return `<p>${item.role}: ${content}</p>`;
+            }).join('');
         }
     
         async function sendText() {
@@ -49,3 +70,5 @@
         <input type="text" id="text-input" name="text" required>
         <button type="submit" id="sendButton">Send</button>
     </form>
+</body>
+</html>
