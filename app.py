@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, send_from_directory
 app = Flask(__name__, static_folder=".")
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 instruction = 'You are a helpful assistant.'
-history = [{'role':'system','content':f'{instruction}'}]
+history = []
 
 @app.route('/')
 def index():
@@ -24,10 +24,13 @@ def process_history(history, limit):
 
 def query_openai():
     global history
+    global instruction
     response = openai.ChatCompletion.create(
-    model="gpt-3.5-turbo",
+    model="gpt-4",
     messages=[
-            process_history(history, 5)
+            #process_history(history, 5)
+            {'role':'system','content':f'{instruction}'},
+            *process_history(history, 5)
         ]
     )
     openai_response = response['choices'][0]['message']
@@ -42,6 +45,7 @@ def store_text():
     history.append(user_message)
     system_response = {'role':'assistant','content':query_openai()}
     history.append(system_response)
+    print(history)
     return jsonify({"response": "This doesn't work anyway"}), 200
 
 if __name__ == '__main__':
